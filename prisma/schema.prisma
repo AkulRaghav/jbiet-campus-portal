@@ -1,0 +1,672 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NOTE: For production, change provider to "postgresql" which supports enums natively.
+// In SQLite mode, enum fields are stored as String with application-level validation.
+
+// ==================== AUTH & USERS ====================
+
+model User {
+  id                String   @id @default(cuid())
+  email             String?  @unique
+  username          String   @unique
+  passwordHash      String
+  role              String   // STUDENT, FACULTY, ADMIN, ACCOUNTANT, BUS_PROVIDER
+  mustChangePassword Boolean @default(true)
+  isActive          Boolean  @default(true)
+  lastLogin         DateTime?
+  failedAttempts    Int      @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  student           Student?
+  faculty           Faculty?
+  sessions          Session[]
+  auditLogs         AuditLog[]
+
+  @@index([username])
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// ==================== STUDENT ====================
+
+model Student {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  registrationNo        String   @unique
+  batch                 String
+  batchYear             Int
+  branchId              String
+  branch                Branch   @relation(fields: [branchId], references: [id])
+  sectionId             String
+  section               Section  @relation(fields: [sectionId], references: [id])
+  regulation            String?
+  stream                String?
+  admissionCategory     String?
+  admissionNumber       String?
+  dateOfAdmission       DateTime?
+  collegeCode           String   @default("671")
+  branchCode            String
+  courseCompleted        Boolean  @default(false)
+  eligibleHigherEd      Boolean  @default(true)
+
+  name                  String
+  fatherName            String?
+  motherName            String?
+  mobileNo              String?
+  dateOfBirth           DateTime?
+  gender                String?  // MALE, FEMALE, OTHER
+  nationality           String?  @default("Indian")
+  caste                 String?
+  aadharNo              String?
+  isScholarshipHolder   Boolean  @default(false)
+  scholarshipAmount     Float?   @default(0)
+  state                 String?
+  address               String?
+  pincode               String?
+  parentMobileNo        String?
+  religion              String?
+  moleIdentification1   String?
+  moleIdentification2   String?
+
+  photoUrl              String?
+  sscCertificateUrl     String?
+  aadharCardUrl         String?
+  otherDocumentUrls     String?
+
+  attendanceRecords     Attendance[]
+  semesterResults       SemesterResult[]
+  feeRecords            FeeRecord[]
+  documents             DocumentSubmission[]
+  projectGroupMembers   ProjectGroupMember[]
+  chatMessages          ChatMessage[]
+  notifications         Notification[]
+  examRegistrations     ExamRegistration[]
+  revaluationRequests   RevaluationRequest[]
+  detentions            SubjectDetention[]
+  graceApplications     GraceMarksApplication[]
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([registrationNo])
+  @@index([branchId])
+  @@index([sectionId])
+  @@index([batchYear])
+  @@index([batch])
+}
+
+// ==================== FACULTY ====================
+
+model Faculty {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  employeeId        String   @unique
+  name              String
+  branchId          String
+  branch            Branch   @relation(fields: [branchId], references: [id])
+  qualifications    String?
+  designation       String?
+  photoUrl          String?
+  mobileNo          String?
+
+  assignments       FacultyAssignment[]
+  projectGroups     ProjectGroup[]
+  documentComments  DocumentComment[]
+  receivedDocuments DocumentSubmission[] @relation("SubmittedDocuments")
+  leaveApplications LeaveApplication[]
+  leaveBalances     LeaveBalance[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([branchId])
+}
+
+model FacultyAssignment {
+  id              String   @id @default(cuid())
+  facultyId       String
+  faculty         Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  sectionId       String
+  section         Section  @relation(fields: [sectionId], references: [id])
+  subjectId       String
+  subject         Subject  @relation(fields: [subjectId], references: [id])
+  semester        Int
+  academicYear    String
+  isClassTeacher  Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+
+  @@unique([facultyId, sectionId, subjectId, semester, academicYear])
+  @@index([facultyId])
+  @@index([sectionId])
+  @@index([semester, academicYear])
+}
+
+// ==================== ACADEMIC STRUCTURE ====================
+
+model Branch {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  branchCode  String   @unique
+  shortName   String
+
+  students    Student[]
+  faculty     Faculty[]
+  sections    Section[]
+  subjects    Subject[]
+  timetables  Timetable[]
+
+  @@index([code])
+}
+
+model Section {
+  id          String   @id @default(cuid())
+  name        String
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  batchYear   Int
+
+  students    Student[]
+  assignments FacultyAssignment[]
+  timetables  Timetable[]
+  attendances Attendance[]
+
+  @@unique([name, branchId, batchYear])
+  @@index([branchId])
+  @@index([batchYear])
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  semester    Int
+  credits     Int      @default(3)
+
+  assignments    FacultyAssignment[]
+  attendances    Attendance[]
+  subjectResults SubjectResult[]
+  timetableSlots TimetableSlot[]
+  revaluationRequests RevaluationRequest[]
+  detentions     SubjectDetention[]
+  graceApplications GraceMarksApplication[]
+
+  @@index([branchId, semester])
+  @@index([code])
+}
+
+// ==================== ATTENDANCE ====================
+
+model Attendance {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  sectionId   String
+  section     Section  @relation(fields: [sectionId], references: [id])
+  date        DateTime
+  status      String   // PRESENT, ABSENT
+  markedById  String
+  semester    Int
+  academicYear String
+
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, subjectId, date])
+  @@index([studentId, subjectId])
+  @@index([sectionId, subjectId, date])
+  @@index([date])
+}
+
+// ==================== RESULTS ====================
+
+model SemesterResult {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  semester    Int
+  academicYear String
+  examSession String?  // e.g. "Jun-2026", "Dec-2025", "Jan-2025" — the actual exam sitting
+  examType    String?  // "Regular" or "Supplementary"
+  sgpa        Float?
+  cgpa        Float?
+  totalCredits Int?
+  earnedCredits Int?
+
+  subjectResults SubjectResult[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([studentId, semester, academicYear])
+  @@index([studentId])
+  @@index([semester])
+  @@index([examSession])
+}
+
+model SubjectResult {
+  id               String        @id @default(cuid())
+  semesterResultId String
+  semesterResult   SemesterResult @relation(fields: [semesterResultId], references: [id], onDelete: Cascade)
+  subjectId        String
+  subject          Subject       @relation(fields: [subjectId], references: [id])
+  internalMarks    Float?
+  externalMarks    Float?
+  totalMarks       Float?
+  grade            String?
+  gradePoints      Float?
+  credits          Int?
+  isBacklog        Boolean       @default(false)
+  backlogCleared   Boolean       @default(false)
+  clearedInSemester Int?
+
+  @@unique([semesterResultId, subjectId])
+  @@index([subjectId])
+}
+
+// ==================== FEES ====================
+
+model FeeRecord {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  category        String   // TUITION, EXAM, BUS, HOSTEL, LIBRARY, LAB, OTHER
+  semester        Int
+  academicYear    String
+  totalAmount     Float
+  paidAmount      Float    @default(0)
+  scholarshipAmount Float  @default(0)
+  status          String   @default("UNPAID") // PAID, UNPAID, PARTIAL
+  dueDate         DateTime?
+  paidDate        DateTime?
+  transactionId   String?
+  remarks         String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([studentId, category, semester, academicYear])
+  @@index([studentId])
+  @@index([category])
+  @@index([status])
+}
+
+// ==================== TIMETABLE ====================
+
+model Timetable {
+  id          String   @id @default(cuid())
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  sectionId   String
+  section     Section  @relation(fields: [sectionId], references: [id])
+  semester    Int
+  academicYear String
+
+  slots       TimetableSlot[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([branchId, sectionId, semester, academicYear])
+}
+
+model TimetableSlot {
+  id          String   @id @default(cuid())
+  timetableId String
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  subjectId   String?
+  subject     Subject? @relation(fields: [subjectId], references: [id])
+  facultyName String?
+  room        String?
+
+  @@index([timetableId])
+}
+
+// ==================== DOCUMENTS & PROJECTS ====================
+
+model DocumentSubmission {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  submittedToId String?
+  submittedTo Faculty? @relation("SubmittedDocuments", fields: [submittedToId], references: [id])
+  type        String   // INTERNSHIP_REPORT, MINI_PROJECT_REPORT, MAJOR_PROJECT_REPORT, PPT, OTHER
+  projectType String?  // INTERNSHIP, MINI_PROJECT, MAJOR_PROJECT
+  title       String
+  description String?
+  fileUrl     String
+  fileName    String
+  fileSize    Int
+  mimeType    String
+
+  checkerRun      Boolean  @default(false)
+  checkerPassed   Boolean?
+  checkerFeedback String?
+
+  // Repository/Showcase fields
+  extractedText   String?   // Full text extracted from PDF for AI search/chat
+  isShowcased     Boolean   @default(false)  // Approved for public repository
+  showcasedAt     DateTime?
+  abstract        String?   // Short summary for search results
+
+  comments    DocumentComment[]
+  groupId     String?
+  group       ProjectGroup? @relation(fields: [groupId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([submittedToId])
+  @@index([type])
+}
+
+model DocumentComment {
+  id           String             @id @default(cuid())
+  documentId   String
+  document     DocumentSubmission @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  facultyId    String
+  faculty      Faculty            @relation(fields: [facultyId], references: [id])
+  content      String
+  createdAt    DateTime           @default(now())
+}
+
+model ProjectGroup {
+  id          String   @id @default(cuid())
+  name        String
+  projectType String   // INTERNSHIP, MINI_PROJECT, MAJOR_PROJECT
+  guideId     String
+  guide       Faculty  @relation(fields: [guideId], references: [id])
+  academicYear String
+  semester    Int
+
+  members     ProjectGroupMember[]
+  documents   DocumentSubmission[]
+
+  createdAt   DateTime @default(now())
+
+  @@index([guideId])
+}
+
+model ProjectGroupMember {
+  id          String       @id @default(cuid())
+  groupId     String
+  group       ProjectGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student      @relation(fields: [studentId], references: [id])
+
+  @@unique([groupId, studentId])
+}
+
+// ==================== PUBLIC NOTICES ====================
+
+model PublicNotice {
+  id          String   @id @default(cuid())
+  title       String
+  content     String?
+  fileUrl     String?
+  isNew       Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdById String
+
+  @@index([publishedAt])
+}
+
+// ==================== CHATBOT ====================
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  role        String
+  content     String
+  createdAt   DateTime @default(now())
+
+  @@index([studentId, createdAt])
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String
+  entityType  String
+  entityId    String
+  changes     String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type          String   // DOCUMENT_COMMENT
+  title         String
+  message       String
+  linkUrl       String?  // Where to navigate when clicked
+  documentId    String?  // Reference to the specific document
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([studentId, isRead])
+  @@index([createdAt])
+}
+
+// ==================== EXAM SESSIONS & REGISTRATION ====================
+
+model ExamSession {
+  id              String   @id @default(cuid())
+  name            String   // e.g. "II B.Tech II Sem R22 Regular Jun-2026"
+  examType        String   // "Regular" or "Supplementary"
+  semester        Int
+  regulation      String   // e.g. "R22", "R24"
+  academicYear    String   // e.g. "2025-2026"
+  sessionMonth    String   // e.g. "Jun-2026" — the actual exam sitting month
+  batchYears      String   // comma-separated batch years this applies to, e.g. "2022,2023"
+  branchIds       String?  // comma-separated branch IDs (null = all branches)
+  registrationOpen  DateTime
+  registrationClose DateTime
+  isActive        Boolean  @default(true)
+  createdById     String
+
+  registrations   ExamRegistration[]
+  rvDeadline      DateTime?  // Last date for RV requests after results released
+  resultsPublished Boolean @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([semester, regulation])
+}
+
+model ExamRegistration {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examSessionId   String
+  examSession     ExamSession @relation(fields: [examSessionId], references: [id])
+  examFeePaid     Boolean  @default(false)
+  examFeeAmount   Float?
+  examFeeTransId  String?
+  hallTicketReady Boolean  @default(false)
+  registeredAt    DateTime @default(now())
+
+  @@unique([studentId, examSessionId])
+  @@index([studentId])
+  @@index([examSessionId])
+}
+
+// ==================== REVALUATION ====================
+
+model RevaluationRequest {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examSessionId   String
+  subjectId       String
+  subject         Subject  @relation(fields: [subjectId], references: [id])
+  semesterResultId String
+  originalMarks   Float?
+  originalGrade   String?
+  revisedMarks    Float?
+  revisedGrade    String?
+  status          String   @default("PENDING") // PENDING, COMPLETED_NO_CHANGE, COMPLETED_REVISED
+  feePaid         Boolean  @default(false)
+  feeAmount       Float?   @default(500)
+  requestedAt     DateTime @default(now())
+  processedAt     DateTime?
+  processedById   String?
+
+  @@unique([studentId, examSessionId, subjectId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// ==================== DETENTION & RE-REGISTRATION ====================
+
+model SubjectDetention {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId       String
+  subject         Subject  @relation(fields: [subjectId], references: [id])
+  semester        Int
+  academicYear    String
+  reason          String   @default("Insufficient internal marks")
+  reRegistered    Boolean  @default(false)
+  reRegFeePaid    Boolean  @default(false)
+  reRegFeeAmount  Float?   @default(3000) // Configurable, default ₹3000/subject
+  createdAt       DateTime @default(now())
+
+  @@unique([studentId, subjectId, semester, academicYear])
+  @@index([studentId])
+}
+
+// ==================== GRACE MARKS ====================
+
+model GraceMarksApplication {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId       String
+  subject         Subject  @relation(fields: [subjectId], references: [id])
+  semester        Int
+  academicYear    String
+  isEligible      Boolean  @default(false)
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  appliedAt       DateTime @default(now())
+  processedAt     DateTime?
+
+  @@unique([studentId, subjectId, semester, academicYear])
+  @@index([studentId])
+}
+
+// ==================== CONTACT DIRECTORY ====================
+
+model ContactDirectory {
+  id              String   @id @default(cuid())
+  issueType       String   @unique // e.g. "TUITION_FEE", "TRANSPORT_FEE", "SCHOLARSHIP", "EXAM_BRANCH", "GENERAL"
+  label           String   // Display label
+  contactName     String?
+  phone           String?
+  email           String?
+  description     String?
+  sortOrder       Int      @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+// ==================== FACULTY LEAVE MANAGEMENT ====================
+
+model LeaveApplication {
+  id            String   @id @default(cuid())
+  facultyId     String
+  faculty       Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  leaveType     String   // CL (Casual), EL (Earned), ML (Medical), OD (On Duty), SCL (Special Casual)
+  fromDate      DateTime
+  toDate        DateTime
+  totalDays     Int
+  reason        String
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  appliedAt     DateTime @default(now())
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewerComments String?
+  
+  @@index([facultyId])
+  @@index([status])
+  @@index([appliedAt])
+}
+
+model LeaveBalance {
+  id            String   @id @default(cuid())
+  facultyId     String
+  faculty       Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  leaveType     String
+  academicYear  String
+  totalAllotted Int
+  used          Int      @default(0)
+  
+  @@unique([facultyId, leaveType, academicYear])
+  @@index([facultyId])
+}
+
+// ==================== ACADEMIC CALENDAR ====================
+
+model AcademicCalendarEvent {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  eventType     String   // EXAM, HOLIDAY, REGISTRATION, RV_WINDOW, FEST, ACADEMIC
+  startDate     DateTime
+  endDate       DateTime?
+  appliesToAll  Boolean  @default(true)
+  branchIds     String?  // comma-separated, null = all
+  batchYears    String?  // comma-separated, null = all
+  createdById   String
+  createdAt     DateTime @default(now())
+  
+  @@index([startDate])
+  @@index([eventType])
+}
