@@ -74,7 +74,7 @@ export default function AdminAuditPage() {
                     {log.entityType}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">
-                    {log.changes ? JSON.stringify(JSON.parse(log.changes)).slice(0, 80) : '—'}
+                    {log.changes ? (() => { try { return JSON.stringify(JSON.parse(log.changes)).slice(0, 80); } catch { return log.changes?.slice(0, 80) || '—'; } })() : '—'}
                   </td>
                 </tr>
               ))}
