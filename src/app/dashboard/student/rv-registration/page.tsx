@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import { RotateCcw, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react';
 
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
 interface Profile { name: string; registrationNo: string; mobileNo: string | null; }
 interface UserInfo { email: string | null; }
 interface SemesterResult { id: string; semester: number; examSession: string | null; subjectResults: SubjectResult[]; }
@@ -39,6 +44,14 @@ export default function RVRegistrationPage() {
       setResults(res.results || []);
       setExamSessions(es.sessions || []);
     }).catch(console.error).finally(() => setLoading(false));
+
+    // Load Razorpay script
+    if (!document.getElementById('razorpay-script')) {
+      const script = document.createElement('script');
+      script.id = 'razorpay-script';
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      document.head.appendChild(script);
+    }
   }, []);
 
   // When session + semester change, populate available papers
@@ -82,41 +95,67 @@ export default function RVRegistrationPage() {
     setSubmitting(true);
     setMessage('');
 
-    const semResult = results.find(r => r.semester === selectedSem);
-    if (!semResult) { setMessage('No result found'); setSubmitting(false); return; }
+    // Step 1: Create Razorpay order for RV fee
+    try {
+      const orderRes = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: totalFee, purpose: 'RV_FEE', metadata: { rvType, papers: optedPapers.length } }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) { setMessage(orderData.error || 'Payment init failed'); setSubmitting(false); return; }
 
-    // Create RV requests for each opted paper
-    let successCount = 0;
-    for (const paper of optedPapers) {
-      try {
-        const res = await fetch('/api/revaluation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            examSessionId: selectedSession,
-            subjectId: paper.subject.id,
-            semesterResultId: semResult.id,
-            originalMarks: paper.totalMarks,
-            originalGrade: paper.grade,
-            rvType,
-            feeAmount: feePerPaper,
-          }),
-        });
-        if (res.ok) successCount++;
-        else {
-          const err = await res.json();
-          if (err.error?.includes('already requested')) continue; // skip duplicates
-        }
-      } catch { /* continue with others */ }
-    }
+      // Step 2: Open Razorpay checkout
+      const options = {
+        key: orderData.key,
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: 'JBIET',
+        description: `${rvType} Fee — ${optedPapers.length} paper(s)`,
+        order_id: orderData.order.id,
+        handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          // Step 3: After payment, submit RV requests
+          const semResult = results.find(r => r.semester === selectedSem);
+          if (!semResult) { setMessage('No result found'); setSubmitting(false); return; }
 
-    if (successCount > 0) {
-      setMessage(`✓ ${successCount} ${rvType.toLowerCase()} request(s) submitted. Total fee: ₹${totalFee}. Payment will be processed.`);
-      setOptedPapers([]);
-    } else {
-      setMessage('RV requests may already exist for selected papers, or an error occurred.');
+          let successCount = 0;
+          for (const paper of optedPapers) {
+            try {
+              const res = await fetch('/api/revaluation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  examSessionId: selectedSession,
+                  subjectId: paper.subject.id,
+                  semesterResultId: semResult.id,
+                  originalMarks: paper.totalMarks,
+                  originalGrade: paper.grade,
+                  rvType,
+                  feeAmount: feePerPaper,
+                }),
+              });
+              if (res.ok) successCount++;
+            } catch { /* continue */ }
+          }
+
+          if (successCount > 0) {
+            setMessage(`✓ Payment successful! ${successCount} ${rvType.toLowerCase()} request(s) submitted. Paid ₹${totalFee} via Razorpay.`);
+            setOptedPapers([]);
+          } else {
+            setMessage('Payment done but RV requests may already exist.');
+          }
+          setSubmitting(false);
+        },
+        modal: { ondismiss: () => setSubmitting(false) },
+        theme: { color: '#3B6FF2' },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch {
+      setMessage('Payment failed. Try again.');
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   // Available semesters (only those with results)
@@ -174,18 +213,18 @@ export default function RVRegistrationPage() {
         {/* Row 3: RV Type radio */}
         <div className="mb-5">
           <label className="block text-[10px] font-semibold text-secondary uppercase mb-2">Type</label>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="rvType" value="REVALUATION" checked={rvType === 'REVALUATION'}
                 onChange={() => setRvType('REVALUATION')} className="w-4 h-4 text-blue" />
               <span className="text-sm text-ink font-medium">Revaluation</span>
-              <span className="text-[10px] text-muted">(₹{500}/paper)</span>
+              <span className="text-[10px] text-muted">(₹500/paper)</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="rvType" value="RECOUNTING" checked={rvType === 'RECOUNTING'}
                 onChange={() => setRvType('RECOUNTING')} className="w-4 h-4 text-blue" />
               <span className="text-sm text-ink font-medium">Recounting</span>
-              <span className="text-[10px] text-muted">(₹{300}/paper)</span>
+              <span className="text-[10px] text-muted">(₹300/paper)</span>
             </label>
           </div>
         </div>
@@ -263,7 +302,7 @@ export default function RVRegistrationPage() {
               <button onClick={handleContinueToPayment}
                 disabled={optedPapers.length === 0 || submitting}
                 className="bg-blue hover:bg-blue-hover text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {submitting ? 'Processing...' : 'Continue to Payment'}
+                {submitting ? 'Processing...' : `Pay ₹${totalFee} & Submit`}
               </button>
             </div>
           </div>
