@@ -128,7 +128,8 @@ export default function StudentFeesPage() {
 
       {/* Fee Table */}
       <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[600px]">
           <thead className="bg-surface">
             <tr>
               <th className="px-4 py-3 text-left text-[10px] font-semibold text-secondary uppercase">Category</th>
@@ -166,6 +167,7 @@ export default function StudentFeesPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       <p className="text-[10px] text-muted">Payments powered by Razorpay (test mode). Server-side signature verification ensures payment integrity.</p>
