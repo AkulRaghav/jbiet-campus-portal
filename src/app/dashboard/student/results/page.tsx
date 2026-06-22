@@ -106,8 +106,8 @@ export default function StudentResultsPage() {
       <h1 className="text-xl font-bold text-ink">Sem Result</h1>
 
       {/* Lookup Form */}
-      <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-card rounded-2xl border border-border p-4 sm:p-5 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <label className="block text-[10px] font-semibold text-secondary uppercase mb-1.5">Exammy (Exam Session)</label>
             <select value={selectedSession} onChange={e => { setSelectedSession(e.target.value); setShowResult(false); }}
@@ -131,7 +131,7 @@ export default function StudentResultsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mt-4">
           <div>
             <label className="block text-[10px] font-semibold text-secondary uppercase mb-1.5">Roll Number</label>
             <input type="text" value={profile?.registrationNo || ''} readOnly
