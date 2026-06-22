@@ -123,7 +123,7 @@ export default function Sidebar({ role, username }: { role: string; username: st
 
       {mobileOpen && <div className="lg:hidden fixed inset-0 bg-black/30 z-30" onClick={() => setMobileOpen(false)} />}
 
-      <aside className={`${sidebarWidth} bg-sidebar border-r border-border min-h-screen flex flex-col fixed left-0 top-0 z-40 transition-all duration-200 lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`${sidebarWidth} bg-sidebar border-r border-border h-screen flex flex-col fixed left-0 top-0 z-40 transition-all duration-200 lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         {/* Brand + collapse */}
         <div className="px-4 py-5 flex items-center justify-between border-b border-border">
           {!collapsed && (
